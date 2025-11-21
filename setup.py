@@ -60,6 +60,8 @@ setup(
         "world_engine",
         "depth_anything_v2",
         "owl_wms",
+        "owl_wms.models",
+        "owl_wms.nn",
         "owl_vaes",
     ],
     package_dir={

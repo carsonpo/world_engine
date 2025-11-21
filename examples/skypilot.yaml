@@ -1,0 +1,19 @@
+name: inference
+
+resources:
+  image_id: docker.io/lapp0/owl-wm-cond
+  accelerators: H200:8
+  cloud: kubernetes
+
+num_nodes: 1
+
+file_mounts:
+  # must include GITHUB_USER= and GITHUB_TOKEN=
+  /app/my.env: ./.env
+
+setup: |
+  set -a && source /app/my.env && set +a
+  pip install -e git+https://$GITHUB_USER:$GITHUB_TOKEN@github.com/Wayfarer-Labs/world_engine.git#egg=world_engine
+
+run: |
+  python3 - c "from world_engine import WorldEngine, CtrlInput"

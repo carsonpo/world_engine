@@ -38,7 +38,7 @@ ensure_submodules()
 install_requires = parse_requirements("requirements.txt")
 
 setup(
-    name="owl_depth_bundle",
+    name="world_engine",
     version="0.0.1",
     packages=[
         "world_engine",

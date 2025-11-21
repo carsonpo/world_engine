@@ -77,7 +77,11 @@ engine = WorldEngine("OpenWorldLabs/CoD-Img-Base", device="cuda")
 
 Avoid expensive recompilation through caching
 ```
-engine = WorldEngine("OpenWorldLabs/CoD-Img-Base", device="cuda", compile_cache_path="~/.cache/world_engine/")
+engine = WorldEngine(
+    "OpenWorldLabs/CoD-Img-Base",
+    device="cuda",
+    compile_cache_path="~/.cache/world_engine/"
+)
 ```
 
 Specify a prompt which will be used until this function is called again

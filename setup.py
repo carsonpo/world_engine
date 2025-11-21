@@ -60,16 +60,22 @@ setup(
         "world_engine",
         "depth_anything_v2",
         "depth_anything_v2.dinov2_layers",
+        "owl_vaes",
         "owl_wms",
         "owl_wms.models",
         "owl_wms.nn",
-        "owl_vaes",
     ],
     package_dir={
         "world_engine": "src",
+
         "depth_anything_v2": "submodules/Depth-Anything-V2/depth_anything_v2",
-        "owl_wms": "submodules/owl-wms/owl_wms",
+        "depth_anything_v2.dinov2_layers": "submodules/Depth-Anything-V2/depth_anything_v2/dinov2_layers",
+
         "owl_vaes": "submodules/owl-wms/owl-vaes/owl_vaes",
+
+        "owl_wms": "submodules/owl-wms/owl_wms",
+        "owl_wms.models": "submodules/owl-wms/owl_wms/models",
+        "owl_wms.nn": "submodules/owl-wms/owl_wms/nn",
     },
     install_requires=install_requires,
 )

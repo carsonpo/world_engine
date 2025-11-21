@@ -63,6 +63,7 @@ setup(
         "depth_anything_v2.util",
         "owl_vaes",
         "owl_vaes.models",
+        "owl_vaes.utils",
         "owl_wms",
         "owl_wms.models",
         "owl_wms.nn",

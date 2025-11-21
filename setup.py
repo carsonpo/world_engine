@@ -64,6 +64,7 @@ setup(
         "owl_vaes",
         "owl_vaes.models",
         "owl_vaes.utils",
+        "owl_vaes.nn",
         "owl_wms",
         "owl_wms.models",
         "owl_wms.nn",

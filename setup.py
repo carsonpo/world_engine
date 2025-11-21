@@ -59,6 +59,7 @@ setup(
     packages=[
         "world_engine",
         "depth_anything_v2",
+        "depth_anything_v2.dinov2_layers",
         "owl_wms",
         "owl_wms.models",
         "owl_wms.nn",

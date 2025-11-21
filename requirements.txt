@@ -8,3 +8,6 @@ xformers
 -r submodules/Depth-Anything-V2/requirements.txt
 -r submodules/owl-wms/requirements.txt
 -r submodules/owl-wms/owl-vaes/requirements.txt
+
+# Hacky imports (should be bundled by dependencies, but aren't)
+PerceptualSimilarity @ git+https://github.com/shahbuland/PerceptualSimilarity

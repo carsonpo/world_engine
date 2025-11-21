@@ -10,7 +10,7 @@
 
 ## Usage
 
-### Setup
+#### Setup
 ```
 # Install
 pip install "world_engine@git+https://github.com/Wayfarer-Labs/world_engine.git"
@@ -19,7 +19,7 @@ pip install "world_engine@git+https://github.com/Wayfarer-Labs/world_engine.git"
 export HF_TOKEN=<your access token>
 ```
 
-### Run
+#### Run
 ```
 from world_engine import WorldEngine, CtrlInput
 

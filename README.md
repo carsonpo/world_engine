@@ -113,7 +113,8 @@ class CtrlInput:
     mouse: Tuple[float, float] = (0.0, 0.0)  # (x, y) position
 ```
 
-Keycodes are defined by [Owl-Control](https://github.com/Wayfarer-Labs/owl-control/blob/main/src/system/keycode.rs)
+- `button` keycodes are defined by [Owl-Control](https://github.com/Wayfarer-Labs/owl-control/blob/main/src/system/keycode.rs)
+- `mouse` is the raw mouse velocity vector
 
 
 ## Examples

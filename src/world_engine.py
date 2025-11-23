@@ -1,4 +1,4 @@
-from typing import Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 from torch import Tensor
 from dataclasses import dataclass, field
 
@@ -10,6 +10,11 @@ from owl_wms.nn.kv_cache import StaticKVCache
 from world_engine.ae import InferenceAE
 
 
+# Global torch optimizations
+torch._dynamo.config.recompile_limit = 64
+torch.set_float32_matmul_precision("medium")  # low: bf16, medium: tf32, high: fp32
+
+
 @dataclass
 class CtrlInput:
     button: Set[int] = field(default_factory=set)  # pressed button IDs
@@ -18,29 +23,38 @@ class CtrlInput:
 
 @dataclass
 class InferenceConfig:
-    scheduler_sigmas = [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]
-    fps: int = 60
+    scheduler_sigmas: List = [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]
     noise_prev: float = 0.0
 
 
-# Global torch optimizations
-torch._dynamo.config.recompile_limit = 64
-
-torch.set_float32_matmul_precision("medium")  # low: bf16, medium: tf32, high: fp32
+@dataclass
+class OptimizationConfig:
+    pass  # TODO
 
 
 class WorldEngine:
     uncached_k = 1  # Number of uncached frames, a property of our denoising strategy
 
-    def __init__(self, model_uri, inference_cfg=None, device=None, dtype=torch.bfloat16):
+    def __init__(
+        self,
+        model_uri: str,
+        inference_config: Optional[InferenceConfig] = None,
+        optimization_config: Optional[OptimizationConfig] = None,
+        model_config_overrides: Optional[Dict] = None,
+        device=None,
+        dtype=torch.bfloat16,
+    ):
         # Meta
         self.device, self.dtype = device, dtype
-        self.inference_cfg = inference_cfg or InferenceConfig()
+        self.inference_config = inference_config or InferenceConfig()
         self.model_cfg = WorldModel.load_config(model_uri)
 
         # TODO: remove these hardcoding hacks:
         self.model_cfg.n_buttons = self.model_cfg.n_controller_inputs - 2
         self.model_cfg.causal = True
+
+        if model_config_overrides:
+            self.model_cfg.merge_with(model_config_overrides)
 
         # Model
         self.model = WorldModel.from_pretrained(model_uri, cfg=self.model_cfg).to(device=device, dtype=dtype).eval()
@@ -48,7 +62,7 @@ class WorldEngine:
         # self.prompt_encoder = PromptEncoder("google/umt5-xl").to(device).eval()  # TODO: dont hardcode
 
         # Inference Scheduler
-        self.scheduler_sigmas = torch.tensor(self.inference_cfg.scheduler_sigmas, device=device, dtype=dtype)
+        self.scheduler_sigmas = torch.tensor(self.inference_config.scheduler_sigmas, device=device, dtype=dtype)
 
         # State
         self.uncached_buffer = self.kv_cache = self.frame_idx = None
@@ -116,7 +130,7 @@ class WorldEngine:
         """Advance state. Side effects: Updates uncached_buffer, kv_cache"""
         x = self.uncached_buffer["x"]
         state = {k: v for k, v in self.uncached_buffer.items() if k != "x"}
-        sigma = x.new_full((x.size(0), x.size(1)), self.inference_cfg.noise_prev)
+        sigma = x.new_full((x.size(0), x.size(1)), self.inference_config.noise_prev)
 
         for step_sig, step_dsig in zip(self.scheduler_sigmas, self.scheduler_sigmas.diff()):
             sigma[:, -1] = step_sig  # update rollout sigma
@@ -133,5 +147,6 @@ class WorldEngine:
 
 
 # TODO
+# - Push inference config overrides to hub (if reasonable, set an inference config in training)
 # - Apply noise_prev
 # - RoPE for inference

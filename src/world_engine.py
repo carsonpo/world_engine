@@ -141,9 +141,9 @@ class WorldEngine:
             x[:, -1:] = (x[:, -1:] + step_dsig * v[:, -1:]).type_as(x)
 
             # remove cached portions from sequence
-            state = {k: s[:, -self.kv_cache.n_uncached:] for k, s in state.items()}
-            x = x[:, -self.kv_cache.n_uncached:]
-            sigma = sigma[:, -self.kv_cache.n_uncached:]
+            state = {k: s[:, -self.kv_cache.n_uncached_frames:] for k, s in state.items()}
+            x = x[:, -self.kv_cache.n_uncached_frames:]
+            sigma = sigma[:, -self.kv_cache.n_uncached_frames:]
 
         state["x"] = x
         self.uncached_buffer = state

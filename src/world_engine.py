@@ -64,7 +64,7 @@ class WorldEngine:
         self.scheduler_sigmas = torch.tensor(self.inference_config.scheduler_sigmas, device=device, dtype=dtype)
 
         # State
-        self.uncached_buffer = self.kv_cache = self.frame_idx = None
+        self.uncached_buffer = self.kv_cache = self.frame_ts = None
         self.reset()
 
     @torch.inference_mode()
@@ -76,6 +76,7 @@ class WorldEngine:
             torch.cuda.empty_cache()
 
         cfg, dev, dt = self.model_cfg, self.device, self.dtype
+        self.frame_ts = torch.tensor([[0]], dtype=torch.long, device=dev)
         self.uncached_buffer = {
             "x": torch.empty(1, 0, cfg.channels, cfg.height, cfg.width, device=dev, dtype=dt),
             "frame_timestamp": torch.empty(1, 0, device=dev, dtype=torch.long),
@@ -83,7 +84,6 @@ class WorldEngine:
             "button": torch.empty(1, 0, cfg.n_buttons, device=dev, dtype=dt),
         }
         self.kv_cache = StaticKVCache(cfg, max_seq_len=512, batch_size=1, dtype=dt).to(dev)
-        self.frame_idx = 0
 
     @torch.inference_mode()
     def _push_frame_state(self, x, ctrl=None):
@@ -93,12 +93,12 @@ class WorldEngine:
                 torch.tensor(list(ctrl.button), dtype=torch.long), minlength=self.model_cfg.n_buttons,
             ).to(x, non_blocking=True)[None, None],
             "mouse": x.new_tensor(ctrl.mouse)[None, None],
-            "frame_timestamp": x.new_tensor([[self.frame_idx]], dtype=torch.long),
+            "frame_timestamp": self.frame_ts,
             "x": x,
         }
         for k, v in new_frame_state.items():
             self.uncached_buffer[k] = torch.cat([self.uncached_buffer[k], v], dim=1)
-        self.frame_idx += 1
+        self.frame_ts = self.frame_ts + 1
 
     @torch.inference_mode()
     def append_frame(self, img: Tensor, ctrl: CtrlInput = None):
@@ -111,6 +111,7 @@ class WorldEngine:
         return img
 
     @torch.inference_mode()
+    @torch.compile()
     def gen_frame(self, ctrl: CtrlInput = None):
         shape = self.uncached_buffer["x"].shape
         # prepare frame inputs + random N latent

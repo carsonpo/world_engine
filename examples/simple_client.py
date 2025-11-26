@@ -53,7 +53,7 @@ async def ctrl_stream(delay: int = 1) -> AsyncIterator[CtrlInput]:
 
 
 async def main() -> None:
-    uri = sys.argv[1] if len(sys.argv) > 1 else "OpenWorldLabs/CoD-Img-Base"
+    uri = sys.argv[1] if len(sys.argv) > 1 else "OpenWorldLabs/CoDCtl-Causal"
     engine = WorldEngine(uri, device="cuda")
     ctrls = ctrl_stream()
     frames = frame_stream(engine, ctrls)

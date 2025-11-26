@@ -10,13 +10,26 @@ warnings.filterwarnings("ignore")
 # - benchmark encode prompt
 # - isolated benchmark: decode image time
 
+# TODO:
+"""
+world_engine version: <version / commit>
+
+Hardware:
+- details
+- details
+
+Benchmarks:
+- benchmark
+- benchmark
+"""
+
 
 def gen_n_frames(engine, n_frames):
     for _ in range(n_frames):
         engine.gen_frame()
 
 
-def run_benchmark(model_uri: str = "OpenWorldLabs/CoD-Img-Base", device: str = "cuda") -> None:
+def run_benchmark(model_uri: str = "OpenWorldLabs/CoDCtl-Causal", device: str = "cuda") -> None:
     engine = WorldEngine(model_uri, device=device, model_config_overrides={"n_frames": 512})
 
     # Warmup torch compilation
@@ -24,10 +37,14 @@ def run_benchmark(model_uri: str = "OpenWorldLabs/CoD-Img-Base", device: str = "
         engine.gen_frame()
 
     runner = pyperf.Runner(processes=1)
-    runner.bench_func("WorldEngine.gen_frame", engine.gen_frame)
 
     for n_frames in [1, 4, 16, 64]:
-        runner.bench_func(f"AR Rollout n_frames={n_frames}", gen_n_frames, engine, n_frames)
+        runner.timeit(
+            f"AR Rollout n_frames={n_frames}",
+            stmt="gen_n_frames(engine, n_frames)",
+            teardown="engine.reset()",
+            globals={"engine": engine, "gen_n_frames": gen_n_frames, "n_frames": n_frames},
+        )
 
 
 if __name__ == "__main__":

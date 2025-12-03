@@ -111,7 +111,7 @@ class WorldEngine:
         return img
 
     @torch.inference_mode()
-    def gen_frame(self, ctrl: CtrlInput = None):
+    def gen_frame(self, ctrl: CtrlInput = None, return_img: bool = True):
         shape = self.uncached_buffer["x"].shape
         # prepare frame inputs + random N latent
         self._push_frame_state(
@@ -120,8 +120,8 @@ class WorldEngine:
         )
         with torch.amp.autocast('cuda', torch.bfloat16):
             self.uncached_buffer, self.kv_cache = self.denoise_frame(self.uncached_buffer, self.kv_cache)
-            img = self.vae.decode(self.uncached_buffer["x"][:, -1])  # decode last frame -> image
-            return img
+            x = self.uncached_buffer["x"][:, -1]
+            return (self.vae.decode(x) if return_img else x)
 
     def set_prompt(self, prompt: str, timestamp: float = 0.0):
         """Apply text conditioning for T2V"""

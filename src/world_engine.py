@@ -1,11 +1,11 @@
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple
+import torch
 from torch import Tensor
+import torch.nn as nn
 from dataclasses import dataclass, field
 
-import torch
-
 from owl_wms.models.world import WorldModel
-# from owl_wms.nn.kv_cache import StaticKVCache
+from owl_wms.nn.kv_cache import StaticKVCache
 
 from world_engine.ae import InferenceAE
 
@@ -40,169 +40,6 @@ TODO: quantization options
 - bf16
 - a8w8: Float8DynamicActivationFloat8WeightConfig
 """
-
-
-####
-# REMOVE
-import torch.nn as nn
-
-
-class LayerKVCache(nn.Module):
-    def __init__(self, B, H, L, Dh, dtype, tokens_per_frame: int, n_uncached_tok: int):
-        super().__init__()
-        self.tpf = tokens_per_frame
-        self.n_uncached_tok = n_uncached_tok
-
-        # Per-layer KV buffers
-        self.k = nn.Buffer(torch.empty(B, H, L, Dh, dtype=dtype), persistent=False)
-        self.v = nn.Buffer(torch.empty(B, H, L, Dh, dtype=dtype), persistent=False)
-        self.kv_offset = nn.Buffer(torch.zeros((), dtype=torch.long), persistent=False)
-
-        # Per-layer t_pos buffers
-        self.t_pos = nn.Buffer(torch.zeros(B, L, dtype=torch.long), persistent=False)
-        self.t_pos_offset = nn.Buffer(torch.zeros((), dtype=torch.long), persistent=False)
-
-    def upsert(self, k: Tensor, v: Tensor, t_pos: Tensor):
-        # --- KV upsert ---
-        T = k.size(2)
-
-        # Optional: keep this check, but only in eager mode so it doesn't bother Dynamo
-        if not torch._dynamo.is_compiling():
-            assert T % self.tpf == 0, "KV insert must be frame-aligned"
-
-        kv_start = self.kv_offset          # 0-D long tensor
-        kv_end = kv_start + T              # 0-D long tensor
-
-        if not torch._dynamo.is_compiling():
-            kv_end_int = int(kv_end)
-            assert kv_end_int <= self.k.size(2), "KV cache overflow"
-
-        # Build an index tensor [kv_start, kv_start+1, ..., kv_end-1]
-        idx = torch.arange(T, device=self.k.device, dtype=torch.long) + kv_start
-
-        # Write into KV cache along sequence dimension (dim=2)
-        self.k.index_copy_(2, idx, k)
-        self.v.index_copy_(2, idx, v)
-
-        new_kv_off = torch.maximum(
-            kv_start,
-            kv_end - self.n_uncached_tok
-        )
-        self.kv_offset.copy_(new_kv_off)
-
-        # --- t_pos upsert (per-layer) ---
-        if not torch.compiler.is_compiling():
-            torch._assert(t_pos.ndim == 2, "t_pos must be 2D")
-            torch._assert(
-                t_pos.size(0) == self.t_pos.size(0),
-                "Batch mismatch in t_pos",
-            )
-
-        S = t_pos.size(1)
-        # per-layer analogue of: start = max(t_pos_offset, kv_offset.min())
-        t_start = torch.maximum(self.t_pos_offset, self.kv_offset)
-        t_end = t_start + S
-        if not torch.compiler.is_compiling():
-            torch._assert(
-                t_end <= self.t_pos.size(1),
-                f"KV cache overflow (t_pos), {t_end}, {self.t_pos.shape}",
-            )
-
-        t_idx = torch.arange(S, device=self.t_pos.device, dtype=torch.long) + t_start
-        self.t_pos.index_copy_(1, t_idx, t_pos)
-
-        new_t_off = torch.maximum(t_start, t_end - self.n_uncached_tok)
-        self.t_pos_offset.copy_(new_t_off)
-
-        # t_pos_view = self.t_pos[:, :t_end]  # TODO: use for applying attn rules
-
-        idx = torch.arange(T, device=self.k.device, dtype=torch.long) + (kv_end - T)
-        return (
-            self.k.index_select(2, idx),
-            self.v.index_select(2, idx),
-            self.t_pos.index_select(1, idx)
-        )
-
-
-class StaticKVCacheNew(nn.Module):
-    def __init__(self, config, max_seq_len, batch_size, dtype, n_uncached_frames: int = 1):
-        super().__init__()
-
-        self.tpf = config.tokens_per_frame
-        self.n_uncached_frames = n_uncached_frames
-        self.n_uncached_tok = self.tpf * n_uncached_frames
-
-        B = batch_size
-        H = getattr(config, "n_kv_heads", config.n_heads)
-        L = max_seq_len * self.tpf
-        Dh = config.d_model // config.n_heads
-        NL = config.n_layers
-
-        self.layers = nn.ModuleList([
-            LayerKVCache(B, H, L, Dh, dtype, self.tpf, self.n_uncached_tok)
-            for _ in range(NL)
-        ])
-
-    def upsert(self, k: Tensor, v: Tensor, t_pos: Tensor, layer: int):
-        return self.layers[layer].upsert(k, v, t_pos)
-
-class StaticKVCache(nn.Module):
-    def __init__(self, config, max_seq_len, batch_size, dtype, n_uncached_frames=1):
-        super().__init__()
-
-        # Exclude last N tokens from caching
-        self.tpf = config.tokens_per_frame
-        self.n_uncached_frames = n_uncached_frames
-        self.n_uncached_tok = self.tpf * self.n_uncached_frames
-
-        B = batch_size
-        H = getattr(config, "n_kv_heads", config.n_heads)
-        L = max_seq_len * config.tokens_per_frame
-        Dh = config.d_model // config.n_heads
-        NL = config.n_layers
-
-        self.k = nn.Buffer(torch.empty(NL, B, H, L, Dh, dtype=dtype), persistent=False)
-        self.v = nn.Buffer(torch.empty(NL, B, H, L, Dh, dtype=dtype), persistent=False)
-        self.kv_offset = nn.Buffer(torch.zeros(NL, dtype=torch.long), persistent=False)
-
-        # shared between layers
-        self.t_pos = nn.Buffer(torch.zeros(B, L, dtype=torch.long), persistent=False)
-        self.t_pos_offset = nn.Buffer(torch.zeros((), dtype=torch.long), persistent=False)
-
-    def upsert(self, k: Tensor, v: Tensor, layer: int):
-        T = k.size(2)
-        torch._assert((T % self.tpf) == 0, "KV insert must be frame-aligned")
-
-        start = self.kv_offset[layer]
-        end = start + T
-
-        torch._assert(end <= self.k.size(3), "KV cache overflow")
-
-        self.k[layer, :, :, start:end, :].copy_(k)
-        self.v[layer, :, :, start:end, :].copy_(v)
-        new_off = torch.clamp(end - self.n_uncached_tok, min=0)
-        new_off = torch.maximum(new_off, start)
-        self.kv_offset[layer].copy_(new_off)
-
-        return self.k[layer, :, :, :end, :], self.v[layer, :, :, :end, :]  # TODO: make static kv
-
-    def upsert_t_pos(self, t_pos):
-        """Insert per-batch frame ids and return the KV-length view."""
-        assert t_pos.ndim == 2
-        torch._assert(t_pos.size(0) == self.t_pos.size(0), "Batch mismatch in t_pos")
-
-        start = torch.maximum(self.t_pos_offset, self.kv_offset.min())
-        S = t_pos.size(1)
-        end = start + S
-        torch._assert(end <= self.t_pos.size(1), f"KV cache overflow (t_pos), {end}, {self.t_pos.shape}")
-
-        self.t_pos[:, start:end].copy_(t_pos)
-        new_off = torch.maximum(start, torch.clamp(end - self.n_uncached_tok, min=0))
-        self.t_pos_offset.copy_(new_off)
-        return self.t_pos[:, :end]
-
-
-####
 
 
 class WorldEngine:
@@ -240,8 +77,12 @@ class WorldEngine:
         # Inference Scheduler
         self.scheduler_sigmas = torch.tensor(self.model_cfg.scheduler_sigmas, device=device, dtype=dtype)
 
+        pH, pW = getattr(self.model_cfg, "patch", [1, 1])
+        self.frm_shape = 1, 1, self.model_cfg.channels, self.model_cfg.height * pH, self.model_cfg.width * pW
+
         # State
-        self.uncached_buffer = self.kv_cache = self.frame_ts = None
+        self.kv_cache = StaticKVCache(self.model_cfg, max_seq_len=512, batch_size=1, dtype=dtype).to(device)
+        self.frame_ts = torch.tensor([[0]], dtype=torch.long, device=device)
         self.reset()
 
     def quantize(self, model):
@@ -262,16 +103,8 @@ class WorldEngine:
     @torch.inference_mode()
     def reset(self):
         """Reset state for new generation"""
-        cfg, dev, dt = self.model_cfg, self.device, self.dtype
-        pH, pW = getattr(cfg, "patch", [1, 1])
-        self.frame_ts = torch.tensor([[0]], dtype=torch.long, device=dev)
-        self.uncached_buffer = {
-            "x": torch.empty(1, 0, cfg.channels, cfg.height * pH, cfg.width * pW, device=dev, dtype=dt),
-            "frame_timestamp": torch.empty(1, 0, device=dev, dtype=torch.long),
-            "mouse": torch.empty(1, 0, 2, device=dev, dtype=dt),
-            "button": torch.empty(1, 0, cfg.n_buttons, device=dev, dtype=dt),
-        }
-        self.kv_cache = StaticKVCache(cfg, max_seq_len=512, batch_size=1, dtype=dt).to(dev)
+        self.frame_ts = self.frame_ts * 0
+        self.kv_cache = StaticKVCache(self.model_cfg, max_seq_len=512, batch_size=1, dtype=self.dtype).to(self.device)
 
     @torch.inference_mode()
     @torch.compile
@@ -282,37 +115,29 @@ class WorldEngine:
             idx = x.new_tensor(list(ctrl.button), dtype=torch.long)
             button.index_fill_(-1, idx, 1.0)
         mouse = x.new_tensor(ctrl.mouse, dtype=self.dtype)[None, None]
-
-        new_frame_state = {
+        inputs = {
             "button": button,
             "mouse": mouse,
-            "frame_timestamp": self.frame_ts,
-            "x": x,
+            "frame_timestamp": self.frame_ts.clone(),
         }
-        for k, v in new_frame_state.items():
-            self.uncached_buffer[k] = torch.cat([self.uncached_buffer[k], v], dim=1)
         self.frame_ts = self.frame_ts + 1
+        return inputs
 
     @torch.inference_mode()
     def append_frame(self, img: Tensor, ctrl: CtrlInput = None):
         assert img.dtype == torch.uint8, img.dtype
         # push frame inputs w/ clean latent
-        self._push_frame_state(
-            x=self.vae.encode(img).unsqueeze(1),
-            ctrl=ctrl
-        )
+        x = self.vae.encode(img).unsqueeze(1)
+        inputs = self._push_frame_state(x=x, ctrl=ctrl)
+        self.kv_cache, _ = self.denoise_frame(x, inputs, self.kv_cache, denoise=False)
         return img
 
     @torch.inference_mode()
     def gen_frame(self, ctrl: CtrlInput = None, return_img: bool = True):
-        shape = self.uncached_buffer["x"].shape
         # prepare frame inputs + random N latent
-        self._push_frame_state(
-            x=torch.randn(shape[0], 1, *shape[2:], device=self.device, dtype=self.dtype),
-            ctrl=ctrl,
-        )
-        self.uncached_buffer, self.kv_cache = self.denoise_frame(self.uncached_buffer, self.kv_cache)
-        x = self.uncached_buffer["x"][:, -1]
+        x = torch.randn(self.frm_shape, device=self.device, dtype=self.dtype)
+        inputs = self._push_frame_state(x=x, ctrl=ctrl)
+        self.kv_cache, x = self.denoise_frame(x, inputs, self.kv_cache)
         with torch.amp.autocast('cuda', torch.bfloat16):
             return (self.vae.decode(x) if return_img else x)
 
@@ -321,29 +146,29 @@ class WorldEngine:
         import warnings
         warnings.warn("Not Implemented")
 
-    #@torch.compile(fullgraph=True, mode="max-autotune", dynamic=False)
-    @torch.compile
-    def denoise_frame(self, uncached_buffer: Dict[str, Tensor], kv_cache):
-        """Advance state, generate new frame, provide updated state and kv cache"""
-        x = uncached_buffer["x"].clone()  # needed for max-autotune / reduce-overhead
-        state = {k: v for k, v in uncached_buffer.items() if k != "x"}
-        sigma = x.new_zeros((x.size(0), x.size(1)))
+    @torch.inference_mode()
+    @torch.compile(fullgraph=True, mode="max-autotune", dynamic=False)
+    def denoise_frame(self, x, state: Dict[str, Tensor], kv_cache, denoise: bool = True):
+        """Advance state, generate new frame, provide updated kv_cache, and denoised x"""
+        if denoise:
+            kv_cache.set_frozen(True)
+            x = self._denoise_pass(x, state, kv_cache)
+        kv_cache.set_frozen(False)
+        kv_cache = self._update_kv_pass(x.clone(), state, kv_cache)
+        return kv_cache, x.squeeze(1)
 
+    def _denoise_pass(self, x, state: Dict[str, Tensor], kv_cache):
+        sigma = x.new_empty((x.size(0), x.size(1)))
         for step_sig, step_dsig in zip(self.scheduler_sigmas, self.scheduler_sigmas.diff()):
-            sigma[:, -1] = step_sig  # update rollout sigma
-            v = self.model(x, sigma, **state, kv_cache=kv_cache)
-            x[:, -1:] = x[:, -1:] + step_dsig * v[:, -1:]
+            v = self.model(x, sigma.fill_(step_sig), **state, kv_cache=kv_cache)
+            x = x + step_dsig * v
+        return x
 
-            # remove cached portions from sequence
-            state = {k: s[:, -kv_cache.n_uncached_frames:] for k, s in state.items()}
-            x = x[:, -kv_cache.n_uncached_frames:]
-            sigma = sigma[:, -kv_cache.n_uncached_frames:]
-
-        state["x"] = x
-        return state, kv_cache
+    def _update_kv_pass(self, x, state: Dict[str, Tensor], kv_cache):
+        self.model(x, x.new_zeros((x.size(0), x.size(1))), **state, kv_cache=kv_cache)
+        return kv_cache
 
 
 # TODO
 # - Push inference config overrides to hub (if reasonable, set an inference config in training)
-# - Apply noise_prev
 # - RoPE for inference

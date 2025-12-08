@@ -49,7 +49,7 @@ def print_env_info():
 
 
 @pytest.fixture(scope="session")
-def engine(model_uri="OpenWorldLabs/CoDCtl-Causal-Flux-SelfForcing"):
+def engine(model_uri="OpenWorldLabs/CoDCtl-Causal-Flux-SelfForcing-2Step"):
     engine = WorldEngine(model_uri, device="cuda")
     # global warmup
     for _ in range(3):
@@ -59,7 +59,7 @@ def engine(model_uri="OpenWorldLabs/CoDCtl-Causal-Flux-SelfForcing"):
 
 @pytest.fixture(scope="session")
 def last_latent(engine):
-    return engine.uncached_buffer["x"][:, -1].detach()
+    return engine.gen_frame(return_img=False).detach()
 
 
 def test_img_decoder_only(benchmark, engine, last_latent):

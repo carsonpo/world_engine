@@ -47,7 +47,7 @@ engine = WorldEngine("OpenWorldLabs/CoDCtl-Causal-SelfForcing-UniformSigma", dev
 engine.set_prompt("A fun game")
 
 # Optional: Force the next frame to be a specific image
-img = pipeline.append_frame(uint8_img)
+img = pipeline.append_frame(uint8_img)  # (H, W, 3)
 
 # Generate 3 video frames conditioned on controller inputs
 for controller_input in [

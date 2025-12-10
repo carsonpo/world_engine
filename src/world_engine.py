@@ -26,7 +26,7 @@ class CtrlInput:
 
 @dataclass
 class InferenceConfig:
-    quant: Optional[str] = "fp8"
+    quant: Optional[str] = None
     # TODO: use model config scheduler sigmas
     # scheduler_sigmas: Optional[List[float]] = field(default_factory=lambda: [1.0, 0.75, 0.5, 0.25, 0.0])
     # noise_prev: float = 0.0  # always 0 due to self forcing
@@ -58,8 +58,6 @@ class WorldEngine:
         self.vae = InferenceAE.from_pretrained(model_uri, device=device, dtype=dtype)
         # self.prompt_encoder = PromptEncoder("google/umt5-xl").to(device).eval()  # TODO: dont hardcode
         self.model = WorldModel.from_pretrained(model_uri, cfg=self.model_cfg).to(device=device, dtype=dtype).eval()
-
-        self.model = WorldModel(self.model_cfg).to(device=device, dtype=dtype).eval()
         self.quantize(self.model, inference_config.quant)
 
         # Inference Scheduler
@@ -74,7 +72,9 @@ class WorldEngine:
         self.reset()
 
     def quantize(self, model, quant: Optional[str] = None):
-        import torch
+        if quant is None:
+            return
+
         from torchao.quantization import (
             quantize_,
             Float8DynamicActivationFloat8WeightConfig,
@@ -89,9 +89,6 @@ class WorldEngine:
         )
         from torchao.dtypes import MarlinSparseLayout
         from torchao.quantization.utils import recommended_inductor_config_setter
-
-        if quant is None:
-            return
 
         def is_bf16_linear(mod: nn.Module, _: str) -> bool:
             weight = getattr(mod, "weight", None)

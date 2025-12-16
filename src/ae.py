@@ -5,7 +5,7 @@ import os
 import torch
 from torch.nn import functional as F
 
-from depth_anything_v2.dpt import DepthAnythingV2
+# from depth_anything_v2.dpt import DepthAnythingV2
 
 
 torch.backends.cuda.enable_flash_sdp(True)
@@ -141,7 +141,7 @@ class InferenceAE:
         self.device = device
         self.dtype = dtype
         self.ae_model = ae_model.eval().to(device=device, dtype=dtype)
-        self.depth_model = BatchedDepthPipe(input_mode="bfloat16", batch_size=1)
+        # self.depth_model = BatchedDepthPipe(input_mode="bfloat16", batch_size=1)
 
         self.scale = 1.0  # TODO: dont hardcode. AE should keep internal scale buffer
 

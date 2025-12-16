@@ -14,11 +14,11 @@ dependencies = [
   "rotary-embedding-torch>=0.8.8",
   "tensordict",
   "torchao==0.15.0+cu128",
-  "fbgemm-gpu-genai==2025.12.13+cu128",
+  "fbgemm-gpu-genai==2025.12.13+cu128",  # nightly
   "transformers==4.57.3",
   "ftfy",
   "diffusers",
-#  "xformers",
+  "xformers==0.0.34",  # nightly
   "huggingface-hub==0.36.0",
   "omegaconf",
 ]

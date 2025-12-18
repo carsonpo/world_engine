@@ -41,12 +41,10 @@ class FP8W8A8Linear(nn.Module):
 def quantize_model(model: nn.Module, quant: str):
     def eligible(m: nn.Module) -> bool:
         w = getattr(m, "weight", None)
-        sh = getattr(w, "shape", ())
-        return (
-            isinstance(m, nn.Linear) and
-            getattr(w, "dtype", None) is torch.bfloat16 and
-            all(d % 16 == 0 for d in sh)
-        )
+        if not (isinstance(m, nn.Linear) and getattr(w, "dtype", None) is torch.bfloat16):
+            return False
+        o, k = w.shape
+        return (o % 16 == 0) and (k % 16 == 0)
 
     new_linear = {
         "w8a8": FP8W8A8Linear,

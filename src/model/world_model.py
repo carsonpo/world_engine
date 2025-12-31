@@ -111,10 +111,41 @@ class MLPFusion(nn.Module):
 
         Wx, Wc = self.mlp.fc1.weight.chunk(2, dim=1)  # each [D, D]
 
+        """
         x = x.view(B, L, -1, D)
         h = F.linear(x, Wx) + F.linear(cond, Wc).unsqueeze(2)  # broadcast, no repeat/cat
         h = F.silu(h)
         y = F.linear(h, self.mlp.fc2.weight)
+        return y.flatten(1, 2)
+        """
+
+        # TODO: Review this hack, clean it up, ensure we generalize to any quant
+        fc1 = self.mlp.fc1
+        x = x.reshape(B, L, -1, D)
+
+        if isinstance(fc1, nn.Linear):
+            Wx, Wc = fc1.weight.chunk(2, dim=1)  # each [D, D]
+            h = F.linear(x, Wx) + F.linear(cond, Wc).unsqueeze(2)
+        else:
+            # FP8W8A8Linear path: two scaled_mm calls, no cat, still quantized
+            wT, ws, inv = fc1.wT, fc1.ws, fc1._inv
+            f8 = torch.float8_e4m3fn
+
+            def mm(a2d: torch.Tensor, wT_slice: torch.Tensor) -> torch.Tensor:
+                xs = (a2d.abs().amax() * inv).clamp_min(1e-8).float()  # 0-d
+                af8 = (a2d / xs.to(a2d.dtype)).to(f8).contiguous()
+                return torch._scaled_mm(
+                    af8, wT_slice, xs, ws,
+                    bias=None, out_dtype=torch.float16, use_fast_accum=True
+                )
+
+            x2 = x.reshape(-1, D)
+            c2 = cond.reshape(-1, D)
+            yx = mm(x2, wT[:D, :]).reshape(B, L, -1, D)
+            yc = mm(c2, wT[D:, :]).reshape(B, L, 1,  D)
+            h = (yx + yc).to(x.dtype)
+
+        y = self.mlp.fc2(F.silu(h))
         return y.flatten(1, 2)
 
 

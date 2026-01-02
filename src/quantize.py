@@ -156,10 +156,10 @@ class FP8Linear(nn.Module):
         Forward pass using FP8 matmul.
 
         Args:
-            x: Input tensor of shape [..., in_features] (must be 2D)
+            x: Input tensor of shape [..., in_features] (flattens if > 2D)
 
         Returns:
-            Output tensor of shape [..., out_features] in BF16 format
+            Output tensor of shape [..., out_features] in BF16 format, unflattened if input is > 2D
         """
 
         # Convert input to FP8 e4m3

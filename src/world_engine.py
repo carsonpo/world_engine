@@ -122,6 +122,7 @@ class WorldEngine:
         return self._ctx
 
     def prep_inputs(self, x, ctrl=None):
+        ctrl.mouse = torch.tensor(ctrl.mouse)
         ctx = self._prep_inputs(x, ctrl)
 
         # prepare prompt conditioning

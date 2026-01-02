@@ -142,19 +142,11 @@ class FP8W8A8Linear(nn.Module):
 
 
 class FP8Linear(nn.Module):
-    """
-    FP8 Linear layer using torch._scaled_mm for inference.
-
-    This layer caches the FP8 weight on first forward for CUDA graph compatibility.
-    Uses constant scaling factors of 1.0 (naive e4m3 fp8) and outputs FP8 e4m3.
-    Uses fast accumulation for improved performance.
-
-    Note: Bias is not supported - all models use bias=False.
-    """
-
     def __init__(self, lin: nn.Linear):
         super().__init__()
         self.in_features, self.out_features = lin.in_features, lin.out_features
+
+        self.bias = nn.Parameter(lin.bias.data.clone().to(torch.float8_e4m3fn)) if lin.bias is not None else None
 
         self.weight = nn.Parameter(lin.weight.data.clone().to(torch.float8_e4m3fn))
         self.dummy_scale = torch.ones(1, device=lin.weight.device, dtype=torch.float32)
@@ -181,6 +173,9 @@ class FP8Linear(nn.Module):
             out_dtype=torch.bfloat16,
             use_fast_accum=True,
         ).reshape(x.shape[:-1] + (-1,))
+
+        if self.bias is not None:
+            result += self.bias
 
         return result
 

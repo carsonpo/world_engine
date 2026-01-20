@@ -93,13 +93,13 @@ class ControllerInputEmbedding(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.mlp = MLP(
-            config.n_buttons + 2,  # mouse velocity (x,y) + scroll sign
+            config.n_buttons + 3,  # mouse velocity (x,y) + scroll sign
             config.d_model * config.mlp_ratio,
             config.d_model
         )
 
     def forward(self, mouse: Tensor, button: Tensor, scroll: Tensor):
-        x = torch.cat((mouse, button), dim=-1)
+        x = torch.cat((mouse, button, scroll), dim=-1)
         return self.mlp(x)
 
 

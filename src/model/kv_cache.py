@@ -88,6 +88,7 @@ class LayerKVCache(nn.Module):
         written = torch.zeros(self.capacity, dtype=torch.bool)
         written[L:] = True
         self.written = nn.Buffer(written, persistent=False)
+        self._mask_written = nn.Buffer(torch.empty_like(written), persistent=False)
 
         # Precompute indices:
         #   frame_offsets: [0, 1, ..., tpf-1] (for ring indexing)
@@ -137,7 +138,8 @@ class LayerKVCache(nn.Module):
         self.kv.index_copy_(3, self.current_idx, kv)
 
         write_step = (frame_t.remainder(self.pinned_dilation) == 0)
-        mask_written = self.written.clone()
+        mask_written = self._mask_written
+        mask_written.copy_(self.written)
         mask_written[ring_idx] = mask_written[ring_idx] & ~write_step
         bm = make_block_mask(T, self.capacity, mask_written)
 

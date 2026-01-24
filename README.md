@@ -1,15 +1,21 @@
+[![Documentation Status](https://readthedocs.com/projects/overworld-world-engine/badge/?version=latest)](https://overworld-world-engine.readthedocs-hosted.com/en/latest/index.html)
+
 <div align="center">
 
 # 🌐 OverWorld Inference Engine
 
-<img src="./assets/diagram.svg" alt="Diagram" width="500" />
+**Core library for World Model inference**
 
-[![Documentation Status](https://readthedocs.com/projects/overworld-world-engine/badge/?version=latest)](https://overworld-world-engine.readthedocs-hosted.com/en/latest/index.html)
-
-**[📖 Documentation](https://overworld-world-engine.readthedocs-hosted.com/en/latest/index.html)**
+[📖 Documentation](https://overworld-world-engine.readthedocs-hosted.com/en/latest/index.html) ·
+[⚡ Quickstart](#quick-start) ·
+[✨ Showcase and Examples](#showcase-and-examples)
 
 </div>
 
+
+<p align="center">
+  <img src="./assets/diagram.svg" alt="Diagram" width="420" />
+</p>
 
 ## Overview
 
@@ -26,9 +32,7 @@ Not a full client:
 
 - No rendering/display of video or images
 - No reading controller/keyboard/mouse input
-- No FAL or other external integrations
-
-Reference client can be found in the [LocalWorld repo](https://github.com/Overworldai/local_world)
+- No external integrations
 
 Out-of-scope pieces can go in `examples/`, which is **not** part of the `world_engine.*` package.
 
@@ -36,19 +40,14 @@ Out-of-scope pieces can go in `examples/`, which is **not** part of the `world_e
 
 #### Setup
 ```
-# Recommended
+# Recommended: set up venv
 python3 -m venv .env
 source .env/bin/activate
 ```
 
 ```
 # Install
-pip install \
-  --index-url https://download.pytorch.org/whl/test/cu128 \
-  --extra-index-url https://download.pytorch.org/whl/nightly/cu128 \
-  --extra-index-url https://pypi.org/simple \
-  --upgrade --ignore-installed \
-  "world_engine @ git+https://github.com/Overworldai/world_engine.git"
+pip install --upgrade --ignore-installed "world_engine @ git+https://github.com/Overworldai/world_engine.git"
 ```
 
 ```
@@ -77,25 +76,6 @@ for controller_input in [
 ]:
 	img = engine.gen_frame(ctrl=controller_input)
 ```
-
-## Docs
-
-### WorldEngine
-
-`WorldEngine` computes each new frame from past frames, the controls, and the current prompt, then appends it to the sequence so later frames stay aligned with what has already been generated.
-
-
-### CtrlInput
-
-```
-@dataclass
-class CtrlInput:
-    button: Set[int] = field(default_factory=set)  # pressed button IDs
-    mouse: Tuple[float, float] = (0.0, 0.0)  # (x, y) position
-```
-
-- `button` keycodes are defined by [Owl-Control](https://github.com/Overworldai/owl-control/blob/main/src/system/keycode.rs)
-- `mouse` is the raw mouse velocity vector
 
 ## Usage
 ```
@@ -127,6 +107,35 @@ img = pipeline.append_frame(uint8_img)  # returns passed image
 
 Note: returned `img` is always on the same device as `engine.device`
 
-## Examples
+### WorldEngine
+
+`WorldEngine` computes each new frame from past frames, the controls, and the current prompt, then appends it to the sequence so later frames stay aligned with what has already been generated.
+
+
+### CtrlInput
+
+```
+@dataclass
+class CtrlInput:
+    button: Set[int] = field(default_factory=set)  # pressed button IDs
+    mouse: Tuple[float, float] = (0.0, 0.0)  # (x, y) position
+```
+
+- `button` keycodes are defined by [Owl-Control](https://github.com/Overworldai/owl-control/blob/main/src/system/keycode.rs)
+- `mouse` is the raw mouse velocity vector
+
+
+## Showcase and Examples
+
+### Tools and clients integrating `world_engine`
+
+- [Overworld.stream](https://overworld.stream)
+- [Overworld Biome](https://github.com/Overworldai/Biome/)
+- [World Engine Zero (HF Space)](https://huggingface.co/spaces/Overworld/world-engine-zero)
+- [Daydream scope-overworld](https://github.com/daydreamlive/scope-overworld)
+- [LocalWorld](https://github.com/Overworldai/local_world)
+
+### Examples and Reference Code
+
 - ["Hello (Over)World" client](./examples/simple_client.py)
 - [Run Performance Benchmarks (`pytest examples/benchmark.py`)](./examples/benchmark.py)

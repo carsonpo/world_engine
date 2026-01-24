@@ -2,7 +2,7 @@
 
 <div align="center">
 
-# 🌐 OverWorld Inference Engine
+# 🌐 Overworld Inference Engine
 
 **Core library for World Model inference**
 

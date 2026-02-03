@@ -53,7 +53,8 @@ def engine(model_uri="Overworld/Waypoint-1-Small"):
     engine = WorldEngine(
         model_uri,
         model_config_overrides={"ae_uri": "OpenWorldLabs/owl_vae_f16_c16_distill_v0_nogan"},
-        device="cuda"
+        device="cuda",
+        load_weights=False
     )
 
     # global warmup

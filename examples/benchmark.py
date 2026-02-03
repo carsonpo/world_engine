@@ -83,9 +83,15 @@ def test_img_decoder_only(benchmark, engine, last_latent):
     benchmark(run)
 
 
+MODEL_OVERRIDES = [None]
+
+
 @pytest.mark.parametrize("dit_only", [True])
 @pytest.mark.parametrize("n_frames", [256])
-@pytest.mark.parametrize("model_overrides", [None])
+@pytest.mark.parametrize(
+    "model_overrides", MODEL_OVERRIDES,
+    ids=lambda d: (",".join(f"{k}={v}" for k, v in d.items()) or "") if d else ""
+)
 def test_ar_rollout(benchmark, dit_only, n_frames, model_overrides):
     engine = get_warm_engine("Overworld/Waypoint-1-Small", model_overrides=model_overrides)
 
